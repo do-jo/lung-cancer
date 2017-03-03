@@ -193,13 +193,12 @@ def zero_center(image):
 if __name__ == "__main__":
     
     # Some constants 
-    plot_data = 0
-    psave = 1
+    plot_data = 1
+    psave = 0
     BASE_FOLDER = r'D:\kaggle\lungcancer\preprocessed_sample_images/'
     INPUT_FOLDER = r'D:\kaggle\lungcancer\sample_images/' #sample images only
     #INPUT_FOLDER = r'H:\kaggle\lung_cancer/' #stage1 images
 
-    
     #parameters for normalization
     MIN_BOUND = -1000.0
     MAX_BOUND = 400.0
@@ -214,13 +213,14 @@ if __name__ == "__main__":
     for patient in patients:
         
         print("loading patient {} of {}: {}".format(counter, len(patients), patient))
-        data = load_scan(INPUT_FOLDER + patients[0])
+        data = load_scan(INPUT_FOLDER + patient)
         stack = get_pixels_hu(data)
-        if plot_data == 1:
-            plt.hist(stack.flatten(), bins=80, color='c')
-            plt.xlabel("Hounsfield Units (HU)")
-            plt.ylabel("Frequency")
-            plt.show()
+        
+#        if plot_data == 1:
+#            plt.hist(stack.flatten(), bins=80, color='c')
+#            plt.xlabel("Hounsfield Units (HU)")
+#            plt.ylabel("Frequency")
+#            plt.show()
       
         # when resampling, save the new spacing! Due to rounding this may be slightly off from the desired spacing  
         pix_resampled, spacing = resample(stack, data, [1,1,1]) #resample our patient's pixels to an isomorphic resolution of 1 by 1 by 1 mm
@@ -230,11 +230,37 @@ if __name__ == "__main__":
         #segmented_lungs = segment_lung_mask(pix_resampled, False)
         segmented_lungs_fill = segment_lung_mask(pix_resampled, True)
         
+        pix_masked = pix_resampled.copy() #or create an empty array
+        pix_normalized = pix_resampled.copy()
+        
         for i in range(pix_resampled.shape[0]): #go through z-stack
             mask = segmented_lungs_fill[i,:,:]
-            pix_masked = pix_resampled[i].copy() #consider removing the copy to save computational time
-            pix_masked[mask == 0] = -1024
+            pix_normalized[i,:,:] = normalize(pix_resampled[i,:,:])
+            temp = pix_normalized[i].copy() #consider removing the copy to save computational time
+            #temp[mask == 0] = -1024
+            temp[mask == 0] = 0
+            pix_masked[i,:,:] = temp
+                    
+        #plot an example frame              
+        if plot_data == 1:
+            i = 75 #frame #
+            
+            f, axarr = plt.subplots(2, 2)
+            #axarr[0,0].imshow(pix_normalized[i,:,:], cmap=plt.cm.gray) #original image
+            axarr[0,1].imshow(pix_resampled[i,:,:], cmap=plt.cm.gray) #resampled image
+            axarr[1,0].imshow(segmented_lungs_fill[i,:,:], cmap=plt.cm.gray) #mask of resampled image
+            axarr[1,1].imshow(pix_masked[i,:,:], cmap=plt.cm.gray) #resampled image with mask
+            
+            #axarr[0, 0].set_title('pix_normalized', fontsize = 10)
+            axarr[0, 1].set_title('resampled', fontsize = 10)
+            axarr[1, 0].set_title('mask', fontsize = 10)
+            axarr[1, 1].set_title('mask on resampled', fontsize = 10)
+            
+            for j in range(2):
+                for k in range(2):
+                    axarr[j,k].set_xticks([])
                       
+                    
         if psave == 1:
             outfile = patient + '.npy'
             outpath = os.path.join(BASE_FOLDER, outfile)
